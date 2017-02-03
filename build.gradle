@@ -1,0 +1,61 @@
+apply plugin: 'java'
+apply plugin: 'war'
+apply plugin: 'application'
+
+[compileJava, compileTestJava]*.options*.encoding = 'UTF-8'
+
+sourceCompatibility = 1.8
+version = '1.0'
+
+mainClassName ='com.beusoft.wc.Application'
+
+repositories {
+//    mavenCentral()
+    jcenter()
+}
+ext {
+    junitVersion = '4.11'
+}
+configurations {
+    all*.exclude group: 'org.slf4j', module: 'slf4j-simple'
+    all*.exclude group: 'org.slf4j', module: 'jcl-over-slf4j'
+    all*.exclude group: 'org.slf4j', module: 'jul-to-slf4j'
+    all*.exclude group: 'org.slf4j', module: 'log4j-over-slf4j'
+    all*.exclude group: 'stax', module: 'stax-api'
+    all*.exclude group: 'xml-apis', module: 'xml-apis'
+}
+
+dependencies {
+    compile(
+  //            'org.apache.logging.log4j:log4j-core:2.1',
+            'org.slf4j:slf4j-api:1.7.5',
+
+
+            fileTree(dir: 'lib', include: '**/*.jar')
+    )
+
+    compile group: 'io.undertow', name: 'undertow-core', version: '1.4.8.Final'
+    compile group: 'io.undertow', name: 'undertow-servlet', version: '1.4.8.Final'
+
+
+    testCompile(
+            "junit:junit:${junitVersion}"
+    )
+
+    providedCompile(
+            'javax.servlet:javax.servlet-api:3.1.0'
+    )
+}
+
+task "create-dirs" << {
+    sourceSets*.java.srcDirs*.each { it.mkdirs() }
+    sourceSets*.resources.srcDirs*.each { it.mkdirs() }
+}
+compileJava {
+    options.compilerArgs << '-Xlint:unchecked'
+    options.encoding = 'UTF-8'
+}
+
+repositories {
+    mavenCentral()
+}
