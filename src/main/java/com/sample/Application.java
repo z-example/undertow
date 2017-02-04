@@ -1,5 +1,6 @@
 package com.sample;
 
+import com.sample.handler.FormDataHandler;
 import io.undertow.Handlers;
 import io.undertow.Undertow;
 import io.undertow.server.HttpHandler;
@@ -43,6 +44,9 @@ public class Application {
         router.get("hello", exchange -> {
             exchange.getResponseSender().send("Hello World");
         });
+        router.get("hello2", exchange -> {
+            System.out.println("会自动关闭");
+        });
         router.get("metrics", exchange -> {
             Thread.sleep(3000);
             exchange.getResponseSender().send("Hello Metrics");
@@ -84,6 +88,16 @@ public class Application {
                 exchange.getResponseSender().send(file.getFileName());
             });
         });
+        router.post("formdata", Helper.formParserHandler(exchange -> {
+            FormData formData = exchange.getAttachment(FormDataParser.FORM_DATA);
+            exchange.getResponseSender().send(formData.toString());
+        }));
+        router.post("formdata2", exchange -> {
+            FormData formData = exchange.getAttachment(FormDataParser.FORM_DATA);
+            exchange.getResponseSender().send(formData.toString());
+        });
+        //Undertow匹配上了一个不会继续匹配,需要代码显示传递并调用next handler
+        //不用担心
 
         router.get("err", exchange -> {
             throw new RuntimeException("CCF");
@@ -91,6 +105,7 @@ public class Application {
         //HttpHandler链
         HttpHandler handler = new MetricsHandler(router);//router是MetricsHandler的next handler
         handler = new SimpleErrorPageHandler(handler);
+        handler = new FormDataHandler(handler);//加上这句之后,就可以自动处理所有formdata了
         Undertow server = Undertow.builder()
                 .addHttpListener(8080, "localhost")
                 .setHandler(handler)

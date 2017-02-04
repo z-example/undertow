@@ -1,5 +1,6 @@
 package com.sample;
 
+import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.server.handlers.form.FormDataParser;
 import io.undertow.server.handlers.form.FormParserFactory;
@@ -17,17 +18,24 @@ public final class Helper {
 //        exchange.getRequestReceiver().
     }
 
-    public static FormParserFactory formParserFactory(){
+    public static FormParserFactory formParserFactory() {
         FormParserFactory.Builder builder = FormParserFactory.builder();
         builder.setDefaultCharset("UTF-8");//默认ISO8859-1会导致文件名乱码问题
         return builder.build();
     }
 
+    public static HttpHandler formParserHandler(HttpHandler next) {
+        return exchange -> {
+//            if(exchange.getResponseHeaders().)
+            FormDataParser parser = formParserFactory().createParser(exchange);
+            parser.parse(next);
+        };
+    }
 
 
     public static String pathStr(HttpServerExchange exchange, String name, String defValue) {
         PathTemplateMatch pathMatch = exchange.getAttachment(PathTemplateMatch.ATTACHMENT_KEY);
-        return pathMatch.getParameters().getOrDefault(name,defValue);
+        return pathMatch.getParameters().getOrDefault(name, defValue);
     }
 
     public static int pathInt(HttpServerExchange exchange, String name, int defValue) {
@@ -38,7 +46,6 @@ public final class Helper {
         }
         return Integer.parseInt(v);
     }
-
 
 
 }
