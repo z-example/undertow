@@ -4,6 +4,7 @@ import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.server.handlers.form.FormDataParser;
 import io.undertow.server.handlers.form.FormParserFactory;
+import io.undertow.util.Headers;
 
 import java.util.Objects;
 
@@ -16,6 +17,7 @@ public class FormDataHandler implements HttpHandler {
 
     private FormParserFactory formParserFactory;
     private HttpHandler next;
+    private String form_data = "multipart/form-data;";
 
     public FormDataHandler(HttpHandler next) {
         this(next, "utf-8");
@@ -34,8 +36,8 @@ public class FormDataHandler implements HttpHandler {
     @Override
     public void handleRequest(HttpServerExchange exchange) throws Exception {
         if (exchange.getAttachment(FormDataParser.FORM_DATA) == null) {
-            String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
-            if (contentType != null && contentType.contains("multipart/form-data;")) {
+            String contentType = exchange.getRequestHeaders().getFirst(Headers.CONTENT_TYPE);
+            if (contentType != null && contentType.contains(form_data)) {
                 FormDataParser parser = formParserFactory.createParser(exchange);
                 parser.parse(next);
             } else {
