@@ -12,6 +12,10 @@ import io.undertow.server.handlers.form.FormDataParser;
 import io.undertow.server.handlers.form.FormParserFactory;
 import io.undertow.util.PathTemplateMatch;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+
 /**
  * @author Zero
  *         Created on 2017/2/4.
@@ -20,14 +24,15 @@ public class ThreadExample {
     public static void main(String[] args) {
         RoutingHandler router = Handlers.routing();
 
-        router.get("hello", exchange -> {
-            System.out.println("---1----> " + Thread.currentThread().getName());
+        router.get("test", exchange -> {
+            System.out.println("---EventLoop Thread----> " + Thread.currentThread().getName());
+            System.out.println("---1----> " + exchange.getDispatchExecutor());
             //切换到Word线程
-            exchange.dispatch(exchange.getDispatchExecutor(), () -> {
-                System.out.println("---2----> " + Thread.currentThread().getName());
+            exchange.dispatch(() -> {
+                System.out.println("---Worker Thread (dispatch)----> " + Thread.currentThread().getName());
                 //切回到IO线程
                 exchange.dispatch(exchange.getIoThread(), () -> {
-                    System.out.println("---2.2----> " + Thread.currentThread().getName());
+                    System.out.println("---EventLoop Thread (dispatch)----> " + Thread.currentThread().getName());
                     exchange.getResponseSender().send("Hello World");
                 });
             });
@@ -43,4 +48,5 @@ public class ThreadExample {
                 .build();
         server.start();
     }
+
 }
