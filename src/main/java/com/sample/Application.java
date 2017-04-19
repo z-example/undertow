@@ -47,13 +47,19 @@ public class Application {
         router.get("hello2", exchange -> {
             System.out.println("会自动关闭");
         });
+        //IO Thread
+        router.get("/thread", exchange -> {
+            exchange.getResponseSender().send(Thread.currentThread().getName());//XNIO-1 I/O-1
+        });
         router.get("metrics", exchange -> {
             Thread.sleep(3000);
             exchange.getResponseSender().send("Hello Metrics");
         });
+        //通过getQueryParameters()获取路径变量
         router.get("/user/{id}", exchange -> {
             exchange.getResponseSender().send("User id:" + exchange.getQueryParameters().get("id").peek());
         });
+        //通过PathTemplateMatch获取路径变量
         router.get("/{test}/*", exchange -> {
             PathTemplateMatch pathMatch = exchange.getAttachment(PathTemplateMatch.ATTACHMENT_KEY);
             String itemId1 = pathMatch.getParameters().get("test"); // or exchange.getQueryParameters().get("test")
@@ -112,5 +118,10 @@ public class Application {
                 .setIoThreads(4)
                 .build();
         server.start();
+//        Async.executor = server.getWorker();
+        //Worker Thread
+        server.getWorker().submit(() -> {
+            System.out.println("First Task: "+Thread.currentThread().getName());//First Task: XNIO-1 task-1
+        });
     }
 }
