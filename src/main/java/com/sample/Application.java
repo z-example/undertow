@@ -7,12 +7,22 @@ import io.undertow.server.HttpHandler;
 import io.undertow.server.RoutingHandler;
 import io.undertow.server.handlers.BlockingHandler;
 import io.undertow.server.handlers.MetricsHandler;
+import io.undertow.server.handlers.PathHandler;
 import io.undertow.server.handlers.error.SimpleErrorPageHandler;
 import io.undertow.server.handlers.form.FormData;
 import io.undertow.server.handlers.form.FormDataParser;
 import io.undertow.server.handlers.form.FormParserFactory;
 import io.undertow.server.handlers.form.MultiPartParserDefinition;
+import io.undertow.server.handlers.resource.ClassPathResourceManager;
+import io.undertow.server.handlers.resource.ResourceManager;
+import io.undertow.util.Headers;
 import io.undertow.util.PathTemplateMatch;
+import io.undertow.websockets.WebSocketConnectionCallback;
+import io.undertow.websockets.core.AbstractReceiveListener;
+import io.undertow.websockets.core.BufferedTextMessage;
+import io.undertow.websockets.core.WebSocketChannel;
+import io.undertow.websockets.core.WebSockets;
+import io.undertow.websockets.spi.WebSocketHttpExchange;
 
 import javax.servlet.ServletException;
 import java.util.Deque;
@@ -22,54 +32,25 @@ import java.util.Deque;
  *         Created on 2017/2/2.
  */
 public class Application {
-    //ab -n 100 -c 10 http://127.0.0.1:8080/hh
+    //ab -n 100 -c 10 http://127.0.0.1:8080/
     public static void main(String[] args) throws ServletException {
-        //setIoThreads(20)
-        //>ab -n 10000 -c 10000 http://127.0.0.1:8080/hh 68s
-        //>ab -n 10000 -c 1000 http://127.0.0.1:8080/hh 8.8s
-        //>ab -n 10000 -c 100 http://127.0.0.1:8080/hh 5s
-//        PathHandler path = Handlers.path();
-//        path.addPrefixPath("/hh", new HttpHandler() {
-//            @Override
-//            public void handleRequest(HttpServerExchange exchange) throws Exception {
-////                        exchange.getResponseHeaders().put(Headers.STATUS, 200);
-////                        exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain");
-//                System.out.println(Thread.currentThread().getName());
-//                exchange.getResponseSender().send("Hello World");
-//            }
-//        });
 
-        RoutingHandler router = Handlers.routing();
-
-        router.get("hello", exchange -> {
+        RoutingHandler webRouter = Handlers.routing();
+        webRouter.get("/", exchange -> {
+            //不要在这里写阻塞代码
             exchange.getResponseSender().send("Hello World");
         });
-        router.get("hello2", exchange -> {
+        webRouter.get("/nonsend", exchange -> {
             System.out.println("会自动关闭");
         });
-        //IO Thread
-        router.get("/thread", exchange -> {
-            exchange.getResponseSender().send(Thread.currentThread().getName());//XNIO-1 I/O-1
-        });
-        router.get("metrics", exchange -> {
+        //metrics
+        webRouter.get("/metrics", exchange -> {
             Thread.sleep(3000);
             exchange.getResponseSender().send("Hello Metrics");
         });
-        //通过getQueryParameters()获取路径变量
-        router.get("/user/{id}", exchange -> {
-            exchange.getResponseSender().send("User id:" + exchange.getQueryParameters().get("id").peek());
-        });
-        //通过PathTemplateMatch获取路径变量
-        router.get("/{test}/*", exchange -> {
-            PathTemplateMatch pathMatch = exchange.getAttachment(PathTemplateMatch.ATTACHMENT_KEY);
-            String itemId1 = pathMatch.getParameters().get("test"); // or exchange.getQueryParameters().get("test")
-            String itemId2 = pathMatch.getParameters().get("*"); // or exchange.getQueryParameters().get("*")
-            System.out.println(itemId1);
-            System.out.println(itemId2);
-            exchange.getResponseSender().send("itemId1:" + itemId1 + " \nitemId2" + itemId2);
-        });
+
         //同步
-        router.post("upload", new BlockingHandler(exchange -> {
+        webRouter.post("upload", new BlockingHandler(exchange -> {
             FormParserFactory.Builder builder = FormParserFactory.builder();
             builder.setDefaultCharset("UTF-8");//默认ISO8859-1会导致文件名乱码问题
             FormDataParser parser = builder.build().createParser(exchange);
@@ -82,7 +63,7 @@ public class Application {
             exchange.getResponseSender().send(file.getFileName());
         }));
         //异步,Undertow的异步处理结果是放在附件中的,可以通过exchange.getAttachment()获得结果
-        router.post("upload2", exchange -> {
+        webRouter.post("upload2", exchange -> {
             FormParserFactory.Builder builder = FormParserFactory.builder();
             builder.setDefaultCharset("UTF-8");//默认ISO8859-1会导致文件名乱码问题
             FormDataParser parser = builder.build().createParser(exchange);
@@ -94,34 +75,93 @@ public class Application {
                 exchange.getResponseSender().send(file.getFileName());
             });
         });
-        router.post("formdata", Helper.formParserHandler(exchange -> {
+        webRouter.post("formdata", Helper.formParserHandler(exchange -> {
             FormData formData = exchange.getAttachment(FormDataParser.FORM_DATA);
             exchange.getResponseSender().send(formData.toString());
         }));
-        router.post("formdata2", exchange -> {
+        webRouter.post("formdata2", exchange -> {
             FormData formData = exchange.getAttachment(FormDataParser.FORM_DATA);
             exchange.getResponseSender().send(formData.toString());
         });
+
+
+        //静态资源(jar中) 访问:http://localhost:8080/static/img.jpg
+        //ResourceHandler第288行,
+        ResourceManager resourceManager = new ClassPathResourceManager(Application.class.getClassLoader());//CachingResourceManager
+        webRouter.get("/static/*", Handlers.resource(resourceManager));
+
+//----------------------------------------------REST----------------------------------------------------
+        RoutingHandler api = Handlers.routing();
+        //User API
+        api.post("/user", exchange -> {
+            exchange.getResponseSender().send("add user");
+        });
+        api.delete("/user/{id}", exchange -> {
+            exchange.getResponseSender().send("update user");
+        });
+        api.put("/user", exchange -> {
+            exchange.getResponseSender().send("update user");
+        });
+        //通过getQueryParameters()获取路径变量
+        api.get("/user/{id}", exchange -> {
+            String id = exchange.getQueryParameters().get("id").peek();
+            //path变量是必须的,如果不存在或者数据类型不对应该返回错误吗
+            try {
+                int userId = Integer.parseInt(id);
+                exchange.getResponseSender().send("get user by id: " + userId);
+            } catch (NumberFormatException e) {
+                exchange.setStatusCode(404);
+            }
+        });
+        //通过PathTemplateMatch获取路径变量
+        api.get("/{test}/*", exchange -> {
+            PathTemplateMatch pathMatch = exchange.getAttachment(PathTemplateMatch.ATTACHMENT_KEY);
+            String itemId1 = pathMatch.getParameters().get("test"); // or exchange.getQueryParameters().get("test")
+            String itemId2 = pathMatch.getParameters().get("*"); // or exchange.getQueryParameters().get("*")
+            System.out.println(itemId1);
+            System.out.println(itemId2);
+            exchange.getResponseSender().send("itemId1:" + itemId1 + " \nitemId2" + itemId2);
+        });
+        //----------------------------------------------Web Socket----------------------------------------------------
+        PathHandler wsHandler = Handlers.path();
+        wsHandler.addPrefixPath("/chat", Handlers.websocket((exchange, channel) -> {
+            channel.getReceiveSetter().set(new AbstractReceiveListener() {
+                @Override
+                protected void onFullTextMessage(WebSocketChannel channel, BufferedTextMessage message) {
+                    WebSockets.sendText(message.getData(), channel, null);
+                }
+            });
+            channel.resumeReceives();
+        }));
+        //http://localhost:8080/api/ws/chatUI/
+        wsHandler.addPrefixPath("/chatUI", Handlers.resource(new ClassPathResourceManager(Application.class.getClassLoader())).addWelcomeFiles("ws.html"));
+
         //Undertow匹配上了一个不会继续匹配,需要代码显示传递并调用next handler
         //不用担心
-
-        router.get("err", exchange -> {
+        api.get("err", exchange -> {
             throw new RuntimeException("CCF");
         });
         //HttpHandler链
-        HttpHandler handler = new MetricsHandler(router);//router是MetricsHandler的next handler
-        handler = new SimpleErrorPageHandler(handler);
-        handler = new FormDataHandler(handler);//加上这句之后,就可以自动处理所有formdata了
+        HttpHandler webHandler = new MetricsHandler(webRouter);//router是MetricsHandler的next handler
+        webHandler = new SimpleErrorPageHandler(webHandler);//错误处理
+        webHandler = new FormDataHandler(webHandler);//加上这句之后,就可以自动处理所有formdata了
         Undertow server = Undertow.builder()
                 .addHttpListener(8080, "localhost")
-                .setHandler(handler)
+                .setHandler(Handlers.path()
+                        .addPrefixPath("/", webHandler)
+                        .addPrefixPath("/api", api)
+                        .addPrefixPath("/api/ws", wsHandler)
+                )
                 .setIoThreads(4)
                 .build();
         server.start();
+        //http://localhost:8080/
+        //http://localhost:8080/api/user/123
+
 //        Async.executor = server.getWorker();
         //Worker Thread
         server.getWorker().submit(() -> {
-            System.out.println("First Task: "+Thread.currentThread().getName());//First Task: XNIO-1 task-1
+            System.out.println("First Task: " + Thread.currentThread().getName());//First Task: XNIO-1 task-1
         });
     }
 }

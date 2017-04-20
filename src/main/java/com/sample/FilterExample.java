@@ -8,6 +8,7 @@ import io.undertow.server.HttpServerExchange;
 import io.undertow.server.RoutingHandler;
 import io.undertow.server.handlers.MetricsHandler;
 import io.undertow.server.handlers.error.SimpleErrorPageHandler;
+import io.undertow.server.handlers.resource.PathResourceManager;
 import io.undertow.util.Headers;
 import io.undertow.util.StatusCodes;
 
@@ -26,6 +27,7 @@ public class FilterExample {
         router.get("/admin", exchange -> {
             exchange.getResponseSender().send(exchange.getRelativePath());
         });
+//        router.get("/static",Handlers.resource(new PathResourceManager()));
 
         //HttpHandler链
         HttpHandler handler = new SimpleErrorPageHandler(new LoginFilter(router));
