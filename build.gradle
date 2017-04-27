@@ -7,7 +7,7 @@ apply plugin: 'application'
 sourceCompatibility = 1.8
 version = '1.0'
 
-mainClassName ='com.beusoft.wc.Application'
+mainClassName ='com.sample.Application'
 
 repositories {
 //    mavenCentral()
@@ -36,7 +36,10 @@ dependencies {
 
     compile group: 'io.undertow', name: 'undertow-core', version: '1.4.8.Final'
     compile group: 'io.undertow', name: 'undertow-servlet', version: '1.4.8.Final'
+    compile group: 'com.zaxxer', name: 'HikariCP', version: '2.5.1'
+    compile group: 'org.thymeleaf', name: 'thymeleaf', version: '3.0.5.RELEASE'
 
+    runtime 'mysql:mysql-connector-java:5.1.6'
 
     testCompile(
             "junit:junit:${junitVersion}"
