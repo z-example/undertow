@@ -3,7 +3,10 @@ package com.sample;
 import com.sample.handler.FormDataHandler;
 import io.undertow.Handlers;
 import io.undertow.Undertow;
+import io.undertow.io.IoCallback;
+import io.undertow.io.Sender;
 import io.undertow.server.HttpHandler;
+import io.undertow.server.HttpServerExchange;
 import io.undertow.server.RoutingHandler;
 import io.undertow.server.handlers.BlockingHandler;
 import io.undertow.server.handlers.MetricsHandler;
@@ -12,20 +15,16 @@ import io.undertow.server.handlers.error.SimpleErrorPageHandler;
 import io.undertow.server.handlers.form.FormData;
 import io.undertow.server.handlers.form.FormDataParser;
 import io.undertow.server.handlers.form.FormParserFactory;
-import io.undertow.server.handlers.form.MultiPartParserDefinition;
 import io.undertow.server.handlers.resource.ClassPathResourceManager;
 import io.undertow.server.handlers.resource.ResourceManager;
-import io.undertow.util.Headers;
 import io.undertow.util.PathTemplateMatch;
-import io.undertow.websockets.WebSocketConnectionCallback;
 import io.undertow.websockets.core.AbstractReceiveListener;
 import io.undertow.websockets.core.BufferedTextMessage;
 import io.undertow.websockets.core.WebSocketChannel;
 import io.undertow.websockets.core.WebSockets;
-import io.undertow.websockets.spi.WebSocketHttpExchange;
 
 import javax.servlet.ServletException;
-import java.util.Deque;
+import java.io.IOException;
 
 /**
  * @author Zero
@@ -38,11 +37,42 @@ public class Application {
         RoutingHandler webRouter = Handlers.routing();
         webRouter.get("/", exchange -> {
             //不要在这里写阻塞代码
-            exchange.getResponseSender().send("Hello World");
+            exchange.getResponseSender().send("Hello World");//send(data, IoCallback.END_EXCHANGE);
         });
         webRouter.get("/nonsend", exchange -> {
             System.out.println("会自动关闭");
         });
+
+        webRouter.post("/form", exchange -> {
+            //这里使用了封装好的FormDataHandler，省略下面代码
+           /* FormParserFactory.Builder builder = FormParserFactory.builder();
+            FormDataParser parser = builder.build().createParser(exchange);
+            FormData formData = parser.parseBlocking();
+            exchange.getResponseSender().send(formData.toString());*/
+
+            FormData formData = exchange.getAttachment(FormDataParser.FORM_DATA);
+            exchange.getResponseSender().send(formData.toString());
+        });
+
+        webRouter.get("/send", exchange -> {
+            exchange.getResponseSender().send("send 1", new IoCallback() {
+                @Override
+                public void onComplete(HttpServerExchange exchange, Sender sender) {
+                    try {
+                        Thread.sleep(2000);
+                    } catch (InterruptedException e) {
+                        Thread.interrupted();
+                    }
+                    sender.send("send 2");
+                }
+
+                @Override
+                public void onException(HttpServerExchange exchange, Sender sender, IOException exception) {
+
+                }
+            });
+        });
+
         //metrics
         webRouter.get("/metrics", exchange -> {
             Thread.sleep(3000);
@@ -79,6 +109,7 @@ public class Application {
             FormData formData = exchange.getAttachment(FormDataParser.FORM_DATA);
             exchange.getResponseSender().send(formData.toString());
         }));
+        //表单提交和文件长传都可以
         webRouter.post("formdata2", exchange -> {
             FormData formData = exchange.getAttachment(FormDataParser.FORM_DATA);
             exchange.getResponseSender().send(formData.toString());

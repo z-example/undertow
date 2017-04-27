@@ -14,10 +14,6 @@ import java.util.Objects;
  */
 public final class Helper {
 
-    public static void render(HttpServerExchange exchange, String view) {
-//        exchange.getRequestReceiver().
-    }
-
     public static FormParserFactory formParserFactory() {
         FormParserFactory.Builder builder = FormParserFactory.builder();
         builder.setDefaultCharset("UTF-8");//默认ISO8859-1会导致文件名乱码问题

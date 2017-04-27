@@ -15,9 +15,10 @@ import java.util.Objects;
 public class FormDataHandler implements HttpHandler {
 
 
+    private static final String APPLICATION_X_WWW_FORM_URLENCODED = "application/x-www-form-urlencoded";
+    private static final String MULTIPART_FORM_DATA = "multipart/form-data";
     private FormParserFactory formParserFactory;
     private HttpHandler next;
-    private String form_data = "multipart/form-data;";
 
     public FormDataHandler(HttpHandler next) {
         this(next, "utf-8");
@@ -37,7 +38,10 @@ public class FormDataHandler implements HttpHandler {
     public void handleRequest(HttpServerExchange exchange) throws Exception {
         if (exchange.getAttachment(FormDataParser.FORM_DATA) == null) {
             String contentType = exchange.getRequestHeaders().getFirst(Headers.CONTENT_TYPE);
-            if (contentType != null && contentType.contains(form_data)) {
+            if (contentType != null &&
+                    (contentType.contains(MULTIPART_FORM_DATA) || contentType.equals(APPLICATION_X_WWW_FORM_URLENCODED))) {
+                //FormDataParser不是线程安全的
+                //FormEncodedDataParser和MultiPartUploadHandler
                 FormDataParser parser = formParserFactory.createParser(exchange);
                 parser.parse(next);
             } else {
